@@ -103,7 +103,7 @@ function renderMessage(message, draft = false) {
   const article = document.createElement('article');
   article.className = 'message ' + message.role;
   const heading = document.createElement('h2');
-  heading.textContent = message.role === 'user' ? '你' : (message.example ? '课程示例' : 'DeepSeek');
+  heading.textContent = message.role === 'user' ? '你' : (message.example ? '课程示例' : 'BIOBOT');
   const body = document.createElement('div');
   body.className = 'content chunk';
   if (draft) body.setAttribute('aria-busy', 'true');
@@ -187,7 +187,7 @@ async function readStream(response, onText) {
       return;
     }
     const event = JSON.parse(value);
-    if (event.error) throw new Error('DeepSeek 暂时未能完成回复，请稍后重试。');
+    if (event.error) throw new Error('BIOBOT 暂时未能完成回复，请稍后重试。');
     const choice = event.choices?.[0];
     if (choice?.finish_reason === 'length') truncated = true;
     if (choice?.delta?.content) {
@@ -306,10 +306,10 @@ async function checkAvailability() {
       chatReady = false;
     }
   }
-  byId('mode').textContent = chatReady ? 'DeepSeek' : '示例预览';
+  byId('mode').textContent = chatReady ? '在线' : '示例预览';
   byId('access').hidden = !chatReady;
   byId('composer-note').textContent = chatReady ?
-    'Enter 发送 · Shift + Enter 换行 · 问题将发送给 DeepSeek' :
+    'Enter 发送 · Shift + Enter 换行 · 提问由外部模型服务处理' :
     'Enter 发送 · Shift + Enter 换行';
   if (chatReady) {
     if (byId('notice').textContent.startsWith('实时问答尚未接入')) showNotice();

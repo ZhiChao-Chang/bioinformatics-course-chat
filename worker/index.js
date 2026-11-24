@@ -1,9 +1,11 @@
 const providerUrl = 'https://api.deepseek.com/chat/completions';
 const maxBodyBytes = 65536;
 const maxMessageLength = 20000;
+const streamType = 'text/event-stream; charset=utf-8';
+const identityReply = '我是 BIOBOT，《生物信息学与计算生物学》的课程助教。';
 const systemMessage = {
   role: 'system',
-  content: '你是《生物信息学与计算生物学》的课程学习助手。用提问者使用的语言解释概念、读图和公开数据分析，给出循序渐进的讲解。课程作业优先给思路或提示。示例使用虚构或教学序列，区分已知事实与推断，不编造引用。对能帮助增强病原体危害、规避合成审查或实施攻击的请求，仅提供安全的背景和防护知识。'
+  content: '你的公开名称是 BIOBOT，你是《生物信息学与计算生物学》的课程助教。提问者问你叫什么、你是谁、或请你自我介绍时，用 BIOBOT 和课程助教的身份回答。回答课程问题时直接解释内容，避免主动提及底层模型名称或提供方。用提问者使用的语言解释概念、读图和公开数据分析，给出循序渐进的讲解。课程作业优先给思路或提示。示例使用虚构或教学序列，区分已知事实与推断，不编造引用。对能帮助增强病原体危害、规避合成审查或实施攻击的请求，仅提供安全的背景和防护知识。'
 };
 
 function json(status, message, headers) {
@@ -55,6 +57,11 @@ function validMessages(items) {
   return count <= maxMessageLength && items.at(-1).content.length <= 3000;
 }
 
+function isIdentityQuestion(question) {
+  const text = question.trim().toLowerCase().replace(/[\s，,。？！!?]+/g, '');
+  return /^(?:你好)?(?:请)?(?:你是谁|你是什么|你叫什么(?:名字)?|你的名字是什么|(?:介绍一下|介绍)你自己|自我介绍(?:一下)?|你是(?:deepseek|chatgpt|biobot)(?:吗)?|你是(?:什么|哪个)模型|你用的(?:是)?(?:什么|哪个)模型)$/.test(text);
+}
+
 export async function handleRequest(request, env, fetchUpstream = fetch) {
   const { pathname } = new URL(request.url);
   if (!['/chat', '/health'].includes(pathname)) return new Response('Not found', { status: 404 });
@@ -84,6 +91,13 @@ export async function handleRequest(request, env, fetchUpstream = fetch) {
   const body = await readBody(request);
   if (!validMessages(body?.messages)) return json(400, '问题或对话长度超出范围。', headers);
 
+  if (isIdentityQuestion(body.messages.at(-1).content)) {
+    const chunk = JSON.stringify({ choices: [{ delta: { content: identityReply } }] });
+    return new Response('data: ' + chunk + '\n\ndata: [DONE]\n\n', {
+      headers: { ...headers, 'Content-Type': streamType }
+    });
+  }
+
   let response;
   try {
     response = await fetchUpstream(providerUrl, {
@@ -101,17 +115,17 @@ export async function handleRequest(request, env, fetchUpstream = fetch) {
       })
     });
   } catch {
-    return json(502, '暂时无法连接 DeepSeek，请稍后再试。', headers);
+    return json(502, 'BIOBOT 当前连接不稳定，请稍后再试。', headers);
   }
   if (!response.ok || !response.body || !response.headers.get('Content-Type')?.includes('text/event-stream')) {
     await response.body?.cancel().catch(() => {});
     const status = response.status;
     return json(status === 429 ? 429 : 502,
       status === 402 ? '课堂问答额度暂不可用，请联系课程组织者。' :
-      status === 429 ? 'DeepSeek 正忙，请稍后再试。' :
-      'DeepSeek 暂时无法完成请求，请稍后再试。', headers);
+      status === 429 ? 'BIOBOT 正忙，请稍后再试。' :
+      'BIOBOT 暂时无法完成请求，请稍后再试。', headers);
   }
-  return new Response(response.body, { headers: { ...headers, 'Content-Type': 'text/event-stream; charset=utf-8' } });
+  return new Response(response.body, { headers: { ...headers, 'Content-Type': streamType } });
 }
 
 export default { fetch: (request, env) => handleRequest(request, env) };

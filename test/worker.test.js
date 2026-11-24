@@ -45,6 +45,7 @@ test('allows CORS preflight and streams allowed questions using only the server 
     const body = JSON.parse(options.body);
     assert.deepEqual(body.messages.at(-1), question);
     assert.equal(body.messages[0].role, 'system');
+    assert.match(body.messages[0].content, /BIOBOT/);
     assert.equal(body.max_tokens, 1200);
     return new Response(sse, { headers: { 'Content-Type': 'text/event-stream' } });
   });
@@ -62,4 +63,24 @@ test('availability reports only whether secrets and the limiter are ready', asyn
   const health = () => new Request('https://worker.example/health', { headers: { Origin: origin } });
   assert.deepEqual(await (await handleRequest(health(), env, upstreamNotExpected)).json(), { ready: true });
   assert.deepEqual(await (await handleRequest(health(), { ...env, DEEPSEEK_API_KEY: '' }, upstreamNotExpected)).json(), { ready: false });
+});
+
+test('identity questions return the course identity through the usual stream', async () => {
+  for (const content of ['你好，你是谁？', '请介绍一下你自己。', '你是 DeepSeek 吗？']) {
+    const response = await handleRequest(request({ messages: [{ role: 'user', content }] }), env, upstreamNotExpected);
+    assert.equal(response.status, 200);
+    const output = await response.text();
+    assert.match(output, /我是 BIOBOT/);
+    assert.match(output, /data: \[DONE\]/);
+    assert.doesNotMatch(output, /DeepSeek/i);
+  }
+});
+
+test('a course question mentioning a provider name still reaches the model', async () => {
+  const messages = [{ role: 'user', content: 'DeepSeek 和 BLAST 在序列分析中有什么区别？' }];
+  const response = await handleRequest(request({ messages }), env, async (_, options) => {
+    assert.deepEqual(JSON.parse(options.body).messages.slice(1), messages);
+    return new Response('data: [DONE]\n\n', { headers: { 'Content-Type': 'text/event-stream' } });
+  });
+  assert.equal(response.status, 200);
 });
