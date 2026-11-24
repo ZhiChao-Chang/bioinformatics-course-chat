@@ -56,19 +56,25 @@ function validMessages(items) {
 }
 
 export async function handleRequest(request, env, fetchUpstream = fetch) {
-  if (new URL(request.url).pathname !== '/chat') return new Response('Not found', { status: 404 });
+  const { pathname } = new URL(request.url);
+  if (!['/chat', '/health'].includes(pathname)) return new Response('Not found', { status: 404 });
   const origin = request.headers.get('Origin');
   const headers = {
     'Access-Control-Allow-Origin': env.ALLOWED_ORIGIN,
     'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
     'Cache-Control': 'no-store',
     'Vary': 'Origin'
   };
   if (!env.ALLOWED_ORIGIN || origin !== env.ALLOWED_ORIGIN) return new Response(null, { status: 403 });
   if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers });
+  const ready = Boolean(env.DEEPSEEK_API_KEY && env.CLASS_ACCESS_CODE && env.CHAT_LIMITER);
+  if (pathname === '/health') {
+    if (request.method !== 'GET') return json(405, '请求方法无效。', headers);
+    return Response.json({ ready }, { headers });
+  }
   if (request.method !== 'POST') return json(405, '请使用课堂网页发送问题。', headers);
-  if (!env.DEEPSEEK_API_KEY || !env.CLASS_ACCESS_CODE || !env.CHAT_LIMITER) return json(503, '课堂问答正在配置中。', headers);
+  if (!ready) return json(503, '课堂问答正在配置中。', headers);
 
   const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
   const { success } = await env.CHAT_LIMITER.limit({ key: ip });

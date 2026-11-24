@@ -56,3 +56,9 @@ test('reports exhausted provider balance without relaying upstream errors', asyn
   assert.equal(response.status, 502);
   assert.match(await response.text(), /额度暂不可用/);
 });
+
+test('availability reports only whether secrets and the limiter are ready', async () => {
+  const health = () => new Request('https://worker.example/health', { headers: { Origin: origin } });
+  assert.deepEqual(await (await handleRequest(health(), env, upstreamNotExpected)).json(), { ready: true });
+  assert.deepEqual(await (await handleRequest(health(), { ...env, DEEPSEEK_API_KEY: '' }, upstreamNotExpected)).json(), { ready: false });
+});

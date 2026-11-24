@@ -1,2 +1,1 @@
-// Set to the full HTTPS URL of the deployed Worker. Empty shows the classroom examples.
-export const chatEndpoint = '';
+export const chatEndpoint = 'https://bioinformatics-course-chat.zzc661128.workers.dev/chat';

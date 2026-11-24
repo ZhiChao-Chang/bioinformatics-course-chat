@@ -12,6 +12,7 @@ let conversations = readHistory();
 let currentId = conversations[0]?.id;
 let controller;
 let pendingQuestion;
+let chatReady = false;
 
 function readHistory() {
   try {
@@ -229,7 +230,7 @@ function chatContext(items) {
 
 async function send(question) {
   if (!question || controller) return;
-  if (!chatEndpoint) {
+  if (!chatReady) {
     const example = examples.find(item => item.question === question);
     if (example) showExample(example);
     else showNotice('实时问答尚未接入。可以先打开上方的课程示例。');
@@ -293,13 +294,29 @@ function resizeInput() {
   promptInput.style.height = Math.min(134, promptInput.scrollHeight) + 'px';
 }
 
-byId('mode').textContent = chatEndpoint ? 'DeepSeek' : '示例预览';
-byId('access').hidden = !chatEndpoint;
-if (chatEndpoint) {
-  byId('composer-note').textContent = 'Enter 发送 · Shift + Enter 换行 · 问题将发送给 DeepSeek';
-} else {
-  showNotice('实时问答尚未接入。点击示例即可查看课程讲解。');
+async function checkAvailability() {
+  if (chatEndpoint) {
+    try {
+      const response = await fetch(new URL('./health', new URL(chatEndpoint, location.href)), {
+        cache: 'no-store',
+        signal: AbortSignal.timeout(5000)
+      });
+      chatReady = response.ok && (await response.json()).ready === true;
+    } catch {
+      chatReady = false;
+    }
+  }
+  byId('mode').textContent = chatReady ? 'DeepSeek' : '示例预览';
+  byId('access').hidden = !chatReady;
+  byId('composer-note').textContent = chatReady ?
+    'Enter 发送 · Shift + Enter 换行 · 问题将发送给 DeepSeek' :
+    'Enter 发送 · Shift + Enter 换行';
+  if (chatReady) {
+    if (byId('notice').textContent.startsWith('实时问答尚未接入')) showNotice();
+  } else showNotice('实时问答尚未接入。点击示例即可查看课程讲解。');
 }
+
+void checkAvailability();
 for (const example of examples) {
   const button = document.createElement('button');
   button.className = 'example';
@@ -310,7 +327,7 @@ for (const example of examples) {
   button.append(title, subtitle);
   button.addEventListener('click', () => {
     if (controller) return;
-    if (chatEndpoint) {
+    if (chatReady) {
       promptInput.value = example.question;
       resizeInput();
       promptInput.focus();
@@ -335,7 +352,7 @@ byId('new-chat').addEventListener('click', () => {
   currentId = undefined;
   promptInput.value = '';
   toggleMenu(false);
-  showNotice(chatEndpoint ? '' : '实时问答尚未接入。点击示例即可查看课程讲解。');
+  showNotice(chatReady ? '' : '实时问答尚未接入。点击示例即可查看课程讲解。');
   render();
   resizeInput();
   promptInput.focus();
