@@ -8,7 +8,7 @@
 
 - `site/` 是 GitHub Pages 发布目录，直接使用 HTML、CSS 和 JavaScript。
 - `worker/` 是 DeepSeek 转发服务，只接受课堂页面提交的文本对话和服务端配置的访问码。
-- `wrangler.toml` 配置来源和请求频率。每个来源 IP 每分钟最多 15 次请求，每次最多 1,200 个输出 token。
+- `wrangler.toml` 配置来源和请求频率。每个来源 IP 在单个 Cloudflare 节点的限流阈值为每分钟 15 次请求，每次最多 1,200 个输出 token。
 
 ## 接入实时问答
 

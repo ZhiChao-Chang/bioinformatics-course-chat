@@ -1,0 +1,58 @@
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+import { handleRequest } from '../worker/index.js';
+
+const origin = 'https://class.github.io';
+const env = {
+  ALLOWED_ORIGIN: origin,
+  DEEPSEEK_API_KEY: 'fixture-provider-key',
+  CLASS_ACCESS_CODE: 'fixture-class-code',
+  CHAT_LIMITER: { limit: async () => ({ success: true }) }
+};
+const upstreamNotExpected = async () => assert.fail('Invalid classroom request reached DeepSeek');
+const question = { role: 'user', content: '解释序列比对。' };
+
+function request({ from = origin, code = env.CLASS_ACCESS_CODE, method = 'POST', messages = [question], raw } = {}) {
+  return new Request('https://worker.example/chat', {
+    method,
+    headers: { Origin: from, Authorization: 'Bearer ' + code, 'Content-Type': 'application/json' },
+    body: method === 'POST' ? raw ?? JSON.stringify({ messages }) : undefined
+  });
+}
+
+test('rejects bad origins, incorrect access codes, and unavailable credentials before upstream', async () => {
+  assert.equal((await handleRequest(request({ from: 'https://other.example' }), env, upstreamNotExpected)).status, 403);
+  assert.equal((await handleRequest(request({ code: 'wrong' }), env, upstreamNotExpected)).status, 401);
+  assert.equal((await handleRequest(request(), { ...env, DEEPSEEK_API_KEY: '' }, upstreamNotExpected)).status, 503);
+});
+
+test('limits oversized requests, client system messages and excess calls', async () => {
+  assert.equal((await handleRequest(request({ raw: ' '.repeat(65537) }), env, upstreamNotExpected)).status, 400);
+  assert.equal((await handleRequest(request({ messages: [{ role: 'system', content: 'custom' }, question] }), env, upstreamNotExpected)).status, 400);
+  const limited = { ...env, CHAT_LIMITER: { limit: async () => ({ success: false }) } };
+  assert.equal((await handleRequest(request(), limited, upstreamNotExpected)).status, 429);
+});
+
+test('allows CORS preflight and streams allowed questions using only the server key', async () => {
+  const preflight = await handleRequest(request({ method: 'OPTIONS' }), env, upstreamNotExpected);
+  assert.equal(preflight.status, 204);
+  assert.equal(preflight.headers.get('Access-Control-Allow-Origin'), origin);
+  const sse = 'data: {"choices":[{"delta":{"content":"比对"}}]}\n\ndata: [DONE]\n\n';
+  const response = await handleRequest(request(), env, async (url, options) => {
+    assert.equal(url, 'https://api.deepseek.com/chat/completions');
+    assert.equal(options.headers.Authorization, 'Bearer ' + env.DEEPSEEK_API_KEY);
+    const body = JSON.parse(options.body);
+    assert.deepEqual(body.messages.at(-1), question);
+    assert.equal(body.messages[0].role, 'system');
+    assert.equal(body.max_tokens, 1200);
+    return new Response(sse, { headers: { 'Content-Type': 'text/event-stream' } });
+  });
+  assert.equal(response.status, 200);
+  assert.equal(await response.text(), sse);
+});
+
+test('reports exhausted provider balance without relaying upstream errors', async () => {
+  const response = await handleRequest(request(), env, async () => new Response('raw upstream response', { status: 402 }));
+  assert.equal(response.status, 502);
+  assert.match(await response.text(), /额度暂不可用/);
+});
