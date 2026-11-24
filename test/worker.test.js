@@ -40,6 +40,7 @@ test('allows CORS preflight and streams allowed questions using only the server 
   const sse = 'data: {"choices":[{"delta":{"content":"比对"}}]}\n\ndata: [DONE]\n\n';
   const response = await handleRequest(request(), env, async (url, options) => {
     assert.equal(url, 'https://api.deepseek.com/chat/completions');
+    assert.equal(options.redirect, 'manual');
     assert.equal(options.headers.Authorization, 'Bearer ' + env.DEEPSEEK_API_KEY);
     const body = JSON.parse(options.body);
     assert.deepEqual(body.messages.at(-1), question);

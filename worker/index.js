@@ -88,7 +88,8 @@ export async function handleRequest(request, env, fetchUpstream = fetch) {
   try {
     response = await fetchUpstream(providerUrl, {
       method: 'POST',
-      redirect: 'error',
+      // Workers supports manual redirects. Keep the key on the configured origin.
+      redirect: 'manual',
       signal: request.signal,
       headers: { Authorization: 'Bearer ' + env.DEEPSEEK_API_KEY, 'Content-Type': 'application/json' },
       body: JSON.stringify({
