@@ -1,0 +1,13 @@
+name = "bioinformatics-course-chat"
+main = "worker/index.js"
+compatibility_date = "2026-11-24"
+workers_dev = true
+preview_urls = false
+
+[vars]
+ALLOWED_ORIGIN = "https://zhichao-chang.github.io"
+
+[[ratelimits]]
+name = "CHAT_LIMITER"
+namespace_id = "20261124"
+simple = { limit = 15, period = 60 }
